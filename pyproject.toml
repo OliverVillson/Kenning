@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kenning"
+version = "0.1.0"
+description = "Language models that coin their own tokens. Step 1: the capacity probe."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2",
+    "transformers>=4.45",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+dev = ["pytest", "matplotlib"]
+
+[project.scripts]
+kenning = "kenning.cli:main"
+
+[tool.setuptools]
+packages = ["kenning"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
