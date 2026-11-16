@@ -51,6 +51,7 @@ crashes happen on a laptop and not on rented hardware.
 ```bash
 bash scripts/run_h200.sh quick    # small pass: check timings and that scores move
 bash scripts/run_h200.sh          # full run
+bash scripts/run_predictions.sh   # theory predictions on the saved kennings (quick first)
 ```
 
 Each stage prints its time per batch and resumes if interrupted. Outputs
@@ -76,6 +77,7 @@ python -m kenning traces  --model ... --out data/traces.jsonl
 python -m kenning repeats --model ... --data data/traces.jsonl
 python -m kenning probe   --model ... --out runs/x --source traces --data data/traces.jsonl
 python -m kenning report  --run runs/x
+python -m kenning predictions --model ... --run runs/x   # theory checks, needs --save-vectors
 python -m kenning toy     --text docs --out runs/toy-model
 ```
 
