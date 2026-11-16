@@ -2,7 +2,7 @@
 
 Status: step 1 (capacity probe) is implemented in this repository. Everything
 after step 1 is a plan, and section 3 explains why that plan changed after a
-check of published work.
+check of published work (re-checked against full texts on 2026-11-16).
 
 ## 1. The idea
 
@@ -44,39 +44,103 @@ The first target model is IBM Granite 4.2 3B (Apache 2.0, reasoning inside
 
 ## 3. Published work, and what it leaves open
 
-Checked on 2026-11-11 with a handful of searches, reading abstracts and
-summaries rather than full papers. Treat this as a map, not a literature
-review, and re-read the papers before citing them.
+Re-checked on 2026-11-16 against the full text of each paper (arXiv HTML or
+PDF), replacing the abstract-only check of 2026-11-11. Two kinds of
+statement are kept apart below:
 
-| Work | What it does | How it differs from Kenning |
-|---|---|---|
-| Kuratov et al. 2025, "Cramming 1568 tokens into a single vector" ([arXiv:2502.13063](https://arxiv.org/abs/2502.13063)) | Optimises one input vector per text with the model frozen; reports a single vector letting Llama-3-8B reproduce 1,568 tokens. | Measures capacity only. Our step 1 reuses the method. |
-| zip2zip ([arXiv:2506.01084](https://arxiv.org/abs/2506.01084)) | Merges recurring token sequences into new "hypertokens" at inference time using LZW (a classic dictionary compression algorithm); a small encoder builds their embeddings. | New tokens are surface n-grams chosen by a fixed rule, not concepts chosen by the model. Reports a collapse on arithmetic (GSM8K) and that only about a quarter of hypertokens get reused. |
-| LightThinker ([arXiv:2502.15589](https://arxiv.org/abs/2502.15589)) | Trains a model to compress finished thought steps into a few "gist" tokens built from hidden states, then drops the original text. | Gists are read once as context. They are not emitted again, not expandable. |
-| Selective Latent Thinking ([arXiv:2605.25745](https://arxiv.org/abs/2605.25745)) | Compresses only reasoning spans a confidence gate accepts; keeps numbers as text. | Same single-use limit. Shows that *which* spans are compressed decides accuracy. |
-| Abstract-CoT ([arXiv:2604.22709](https://arxiv.org/abs/2604.22709)) | Reasons in a fixed codebook of reserved tokens (64 in the main runs) learned in post-training; reports up to 11.6x fewer reasoning tokens on MATH-500. Includes results on Granite-4.0-Micro (3B). | Vocabulary is fixed after training. Tokens have no text definition. |
-| CIRF ([arXiv:2605.28292](https://arxiv.org/abs/2605.28292)) | Clusters reasoning steps into 32 to 256 reusable "functional" tokens offline, then fine-tunes the model to reason in them. | Fixed vocabulary; tokens do not decode to text. |
-| Shorthand for Thought ([arXiv:2604.26355](https://arxiv.org/abs/2604.26355)) | Adds 250 frequent multi-word "supertokens" mined from reasoning traces to the vocabulary. | Fixed vocabulary built once. Useful training lessons, see section 7. |
-| Token Assorted ([arXiv:2502.03275](https://arxiv.org/abs/2502.03275)), CCoT ([arXiv:2412.13171](https://arxiv.org/abs/2412.13171)), CODI ([arXiv:2502.21074](https://arxiv.org/abs/2502.21074)), CoLaR ([arXiv:2505.16552](https://arxiv.org/abs/2505.16552)), Coconut | Other ways to replace written reasoning with latent (non-text) tokens or vectors. | Compress or replace reasoning; none mint reusable named tokens at inference time. |
-| Generation with Dynamic Vocabulary ([arXiv:2410.08481](https://arxiv.org/abs/2410.08481)) | Lets a model emit whole text phrases as single units, embedded on the fly by a phrase encoder. | Candidate phrases are supplied from outside the model, not chosen by it; aimed at fluent generation, not reasoning memory. |
+- **Read**: stated in the paper, with the section, table or equation given.
+  Where a fetch was cut short and a passage was only seen through an
+  automated summary, the cell says *(summary only)*; re-read those before
+  citing them.
+- **Inferred**: our judgement about what the paper does not do, or how it
+  compares. These are marked *Inferred* and are claims about absence, which
+  a later version of a paper can overturn.
 
-**What this means.** The two halves of the original idea each exist
-separately: making new tokens for recurring token chains at inference time
-(zip2zip), and compressing finished reasoning into vectors and dropping the
-text (LightThinker, Selective Latent Thinking). Reasoning in a small learned
-vocabulary of reusable abstract tokens also exists (Abstract-CoT, CIRF), but
-with a vocabulary frozen at training time.
+Each row is scored against the five kenning properties: **P1** minted at
+inference time, **P2** for a span the model chose by content, **P3** emitted
+again as an output token, **P4** anchored to source text it expands back
+into, **P5** stored in a table that outlives the context. Y = yes, ~ =
+partly, N = no (from the text read).
 
-What I did not find is the combination that makes a kenning a kenning:
+### 3.1 The papers named in the 2026-11-11 table
 
-1. minted **at inference time**,
-2. for a span the **model chose** because of what it means,
-3. **emitted again** later as a token,
-4. **anchored to text** it can be expanded back into,
-5. kept in a table that can **outlive the context**.
+| Work | P1 | P2 | P3 | P4 | P5 | What the paper says (read) | Corrections to the earlier table |
+|---|---|---|---|---|---|---|---|
+| Kuratov et al., "Cramming 1568 Tokens into a Single Vector and Back Again" ([arXiv:2502.13063](https://arxiv.org/abs/2502.13063)) | Y | N | N | ~ | N | One input vector optimised per text with the model frozen (§3, Fig. 2). Llama-3.1-8B reconstructs up to 1,568 tokens from one vector at 0.99 token accuracy on PG-19 text; 792 for random word sequences (§4.1, Table 1). Capacity is set "not by the length of the input but by the amount of uncertainty to be reduced" (Abstract, §4.3). No downstream use is tested; the Limitations section names it as open. Vector norms are not reported. | Model is Llama-3.1-8B, not Llama-3-8B. *Inferred:* our continue mode (using the vector as context, not just reconstructing) is a measurement this paper does not make. |
+| zip2zip ([arXiv:2506.01084](https://arxiv.org/abs/2506.01084)) | Y | N | Y | Y | N | Hypertokens are created during each inference session; the codebook "is initialized as an empty set" per session (§2.1) and need not persist "across inference calls" (footnote 3). Merges follow the LZW rule (§2.1). A trained hyper-encoder builds input embeddings, and a second one output embeddings when weights are untied (§2.2). Generation uses "a joint softmax over the union of the base vocabulary and the hyper vocabulary" (§2.3), and LZW decoding is lossless (§2.1). Phi-3.5-4B GSM8K: 0.82 base, 0.15 zip2zip (Table 4, §3.5, "significant degradation"); Phi-3-14B 0.84 to 0.25. "Only about 25% of hypertokens are reused during generation" (§5, no supporting table). | The earlier table implied hypertokens are not emitted. They are: zip2zip already has P1, P3 and P4 at the level of surface token strings. "Collapse" is our word; the paper says "significant degradation", for Phi-3.5-4B. |
+| LightThinker ([arXiv:2502.15589](https://arxiv.org/abs/2502.15589)) | Y | ~ | N | N | N | Gist ("cache") tokens hold hidden states of a finished thought; the original text is discarded (Abstract, §3.2). Segment boundaries come from a rule, every 6 tokens or at "\n\n" (§3.2, §4.1; Limitations item 6), while the model learns when to trigger compression (Appendix A.1). Cache tokens are excluded from the training targets (§3.2). "Our cache tokens do not aim for lossless compression" (§3.3). Qwen2.5-7B: accuracy 62.90 to 62.80, peak tokens down 70% (Table 1, §4.2); Llama3.1-8B loses about 6 points. Errors are "not sufficiently sensitive to numerical values" (§4.5). | Span choice is rule-based boundaries with learned timing, not model-chosen by meaning. Otherwise confirmed. |
+| Selective Latent Thinking ([arXiv:2605.25745](https://arxiv.org/abs/2605.25745), v2) | Y | Y | N | N | N | A learned confidence gate accepts the longest prefix whose per-token scores pass a threshold (§3.1, Eq. 1); accepted spans become one latent "injected back into the primary LLM as a proxy embedding" (§3.1), input only, "within a single reasoning trajectory" (§1). Abstract: compressing arbitrary spans cuts Qwen3-4B GSM-Hard accuracy from 54.7% to 17.3%, while keeping numerical tokens explicit retains 51.8%. | The 17.3% is a random-span baseline (2 to 5 tokens), not the method, and the comparison is not length-matched *(summary only for the table location)*. The benchmark is GSM-Hard. This paper does have P2: the gate chooses spans by content. |
+| Abstract-CoT, "Thinking Without Words" ([arXiv:2604.22709](https://arxiv.org/abs/2604.22709), v2) | N | N | Y | N | N | M = 64 reserved tokens in the main runs (§4.1), introduced in post-training (§1). The model generates them under constrained decoding (§3.2). Their frequencies follow a power law, "indicating re-use over a learned 'reasoning language'" (§4.3, Fig. 4). Tokens are "semantically uninformative" (§1); no decoding to text. Granite-4.0-Micro (3B) on MATH-500 (Table 1): base 71.4% at 1,043 tokens, SFT+RL 73.8% at 1,587, Abstract-CoT 74.4% at 153. | Confirmed: 64 tokens, Granite-4.0-Micro included. The "11.6x" is Qwen3-8B against SFT+RL (1,671 / 144); for Granite the ratio is 6.8x against the untuned base model and 10.4x against SFT+RL (computed from Table 1). |
+| CIRF ([arXiv:2605.28292](https://arxiv.org/abs/2605.28292)) | N | N | Y | N | N | Reasoning steps are split at delimiters such as "Step k" (§3.2), clustered offline with a VQ-VAE, and the vocabulary is extended "with K new special tokens" (§3.2) that the fine-tuned model emits (Eq. 13 to 14). No text decoder is defined; the VQ-VAE decoder reconstructs embeddings (§3.2, Eq. 10). GSM8K 71.2% against CODI 25.5% (§4.2). | "32 to 256" is not supported: Table 2 tests K = 32, 128, 512 and 2,048. Say "the paper defines no decoder to text" rather than "tokens do not decode". |
+| Shorthand for Thought ([arXiv:2604.26355](https://arxiv.org/abs/2604.26355), v7) | N | N | Y | Y | N | K = 250 cross-word merges mined from the model's own traces, each "one new vocabulary entry" (§4.1); a fixed extension of the vocabulary. New rows are initialised as the mean of their parts; random starts "failed to train stably", reported "qualitatively rather than as a controlled ablation" (§4.1). Traces shorten by 8.1% on average (§1). | See section 7 for the LoRA claim, which is weaker than we stated. |
+| Generation with Dynamic Vocabulary ([arXiv:2410.08481](https://arxiv.org/abs/2410.08481)) | Y | N | Y | ~ | N | Candidate phrases are retrieved from external documents per test sample (DPR plus FAISS, §3.1, Appendix B) and embedded by a phrase encoder (§2.2). Phrases are scored in the same softmax as tokens (Eq. 1). The method "relies on external techniques, such as a retriever" (Limitations). How emitted phrases map back to text is not spelled out. | Confirmed. Note it has P1 and P3: a per-input vocabulary whose new entries are emitted. |
 
-That combination is the project. A release that only did step compression
-would be a reimplementation of LightThinker on a different model.
+Token Assorted, CCoT, CODI, CoLaR and Coconut were not re-read; the
+2026-11-11 one-line summary of them stands as unverified.
+
+### 3.2 New work found on 2026-11-16
+
+A fresh search (about ten queries for inference-time tokens, dynamic
+vocabularies, expandable compression and persistent latent memory) found the
+papers below. Each was read past the abstract, but the later sections of
+most came through automated summaries, so treat these rows as one pass.
+
+| Work | P1 | P2 | P3 | P4 | P5 | What it does (read) |
+|---|---|---|---|---|---|---|
+| "Large Language Model as Token Compressor and Decompressor" ([arXiv:2603.25340](https://arxiv.org/abs/2603.25340)) | N | ~ | Y | ~ | N | A LoRA-tuned model compresses text into a variable number of Z-tokens from a learned codebook added to the vocabulary (§1, §3.1), and decodes them back (BLEU-4 99.31 at 4x, Table 1). The codebook is trained; Z-tokens are not tied to source spans. |
+| TokMem ([arXiv:2510.00444](https://arxiv.org/abs/2510.00444)) | N | ~ | Y | N | ~ | One trained memory token per procedure, shared "between the input embedding layer and the LM head" (§2.2), so the model emits it to recall the procedure. "No direct textual form" (§2.2); the bank is trained, not written at inference. |
+| LCM, "Lossless Context Management" ([arXiv:2605.04050](https://arxiv.org/abs/2605.04050)) | ~ | N | N | Y | Y | An engine keeps an immutable store and a tree of text summaries; "any summary can be replaced by the original content via the lcm_expand tool" (§2), in "a persistent store" (§2.1). Summaries are text, chosen by the engine, not tokens. (The arXiv stamp, 14 Feb 2026, does not match the id; check before citing.) |
+| "End-to-End Context Compression at Scale" ([arXiv:2606.09659](https://arxiv.org/abs/2606.09659), v2) | Y | ~ | N | ~ | N | An encoder maps each fixed block of N tokens to one latent the decoder reads (§3). An expand tool returns a segment's original text, and generated tokens are compacted online *(§7, summary only)*. |
+| ASTC, "In-Model Context Compression with Agentic Soft Tokens" ([arXiv:2610.41291](https://arxiv.org/abs/2610.41291)) | Y | Y | N | N | ~ | Training-free: a frozen model merges predictable spans of tool output into mean-pooled soft tokens in its cache, keeping exact values as hard tokens (§4.1). Input only. |
+| LensVLM ([arXiv:2605.07019](https://arxiv.org/abs/2605.07019)) | ~ | Y | N | Y | N | Text is rendered to images; the model picks images to expand, and an Expand tool returns their source text (§3.2). Expansion is a tool call, not a token. |
+| Also checked, further away | | | | | | SEED ([arXiv:2611.06084](https://arxiv.org/abs/2611.06084)), Memorilla ([arXiv:2610.21375](https://arxiv.org/abs/2610.21375)), FlashMem ([arXiv:2601.05505](https://arxiv.org/abs/2601.05505)), Metacognitive Reuse ([arXiv:2509.13237](https://arxiv.org/abs/2509.13237), named text "behaviors" in a growing handbook), CLSR ([arXiv:2606.29354](https://arxiv.org/abs/2606.29354), invented text symbol systems). None has P3, none has P4 at token level. |
+
+Not yet opened, worth a look before a public claim: MemGen, MemOS,
+Cartridges, ToolGen, MemoryLLM and M+ (persistent-memory systems named in
+the papers above).
+
+### 3.3 What this means
+
+**No paper read has all five properties** (read, as of 2026-11-16). The
+highest any reaches is three. But every property on its own, and several
+pairs, are already published, so the claim has to be narrower than
+"kennings are new":
+
+- **P1 + P3 + P4 together are published** for surface strings: zip2zip
+  mints tokens per session, emits them through a joint softmax and decodes
+  them losslessly. Generation with Dynamic Vocabulary has P1 + P3 with
+  retrieved phrases. "A model emits tokens it did not have at training time"
+  is not new.
+- **P2 is published for input-only compression**: Selective Latent Thinking
+  (learned gate) and ASTC (frozen model, predictability) choose spans by
+  content.
+- **Expanding back to source text is published** as a tool or runtime step:
+  LCM, LensVLM, the end-to-end compression paper. P4 alone is not new.
+- **Learned tokens in the output head with persistence (P3 + P5)** exist in
+  TokMem, but are trained offline per procedure.
+
+*Inferred:* what remains open is the join of the two lines of work. Every
+system that emits new tokens (zip2zip, Dynamic Vocabulary, Abstract-CoT,
+CIRF, Shorthand, TokMem, Z-tokens) gets its spans from a fixed rule, a
+retriever or training. Every system where the model chooses spans by
+content (Selective Latent Thinking, ASTC, LightThinker's timing) only reads
+the result once as input. **The narrowed claim is: a vector that the model
+mints at inference for a span it chose, which then competes with the
+vocabulary at the output and stays anchored to its source text in a table
+that can outlive the context.** P2 + P3 at once is the core; P4 and P5 are
+what make it safe and useful, but are not by themselves new.
+
+Consequences for the plan:
+
+1. Scope decision 1 in section 8 stands, and is stronger: emit-again is the
+   part that separates Kenning from published work, so a Kenning 1 without
+   it would add nothing new.
+2. A release must say "to our knowledge, as of <date>" and cite zip2zip,
+   Selective Latent Thinking, LCM and TokMem as the nearest work on each
+   side, rather than claim each property is new.
+3. zip2zip becomes a required baseline alongside Abstract-CoT: it is the
+   published system with emit-again, so a kenning has to beat surface
+   n-gram tokens at reuse, not just exist.
 
 ## 4. System sketch
 
@@ -184,23 +248,40 @@ ordinary embedding distribution.
 
 ## 7. Lessons taken from published work
 
-- **Keep numbers as text.** zip2zip reports GSM8K accuracy for one model
-  falling from 0.82 to 0.15, and Selective Latent Thinking reports that
-  compressing arbitrary spans cut accuracy from 54.7 to 17.3 on one
-  benchmark while keeping numbers explicit preserved most of it. Kennings
-  should not swallow digits, and evaluation must include arithmetic.
-- **Initialise from token embeddings.** Shorthand for Thought reports that
-  new embeddings started from the mean of their parts trained, and random
-  starts did not.
-- **LoRA may not be enough.** The same paper reports that LoRA made the
-  model use new tokens without shortening its output, and that unfreezing a
-  few layers was needed. Budget for trying both in step 3.
-- **Measure reuse, not just creation.** zip2zip reports about a quarter of
-  its new tokens ever being used again. A kenning that is minted and never
-  emitted again is only compression.
-- **Fixed small vocabularies work.** Abstract-CoT reports large compression
-  on a 3B Granite model with 64 reserved tokens. That is the baseline a
-  growing vocabulary has to justify itself against.
+Re-checked against full texts on 2026-11-16; see section 3 for sources.
+
+- **Keep numbers as text.** zip2zip reports Phi-3.5-4B GSM8K accuracy
+  falling from 0.82 to 0.15 (Table 4), and Selective Latent Thinking reports
+  that compressing random spans cut Qwen3-4B GSM-Hard accuracy from 54.7% to
+  17.3% while keeping numbers explicit kept 51.8% (Abstract). LightThinker
+  attributes its maths errors to compression that is "not sufficiently
+  sensitive to numerical values" (§4.5). *Inferred:* Cramming explains why;
+  capacity is set by the uncertainty to be removed, and digits carry the
+  most. Kennings should not swallow digits, and evaluation must include
+  arithmetic.
+- **Initialise from token embeddings.** Shorthand for Thought initialises
+  new rows as the mean of their parts and reports that random starts
+  "failed to train stably", but only "qualitatively rather than as a
+  controlled ablation" (§4.1). Weak evidence; cheap to follow.
+- **LoRA may not be enough (weak evidence).** Shorthand for Thought's
+  comparison of LoRA, embedding-only training and unfreezing a few layers is
+  in its Appendix D, Table 8, which we only saw through a summary: on one
+  model (QwQ-32B) LoRA changed output length by -1.0% to +3.4%, while
+  unfreezing shortened it by 2.3% to 10.6%. One model and three benchmarks;
+  it does not show unfreezing is needed. Budget for trying both in step 3.
+- **Measure reuse, not just creation.** zip2zip states that only about 25%
+  of hypertokens are reused during generation (§5), without a supporting
+  table. A kenning that is minted and never emitted again is only
+  compression.
+- **Fixed small vocabularies work.** Abstract-CoT reaches 74.4% on
+  MATH-500 with 153 reasoning tokens on Granite-4.0-Micro (3B), against
+  71.4% at 1,043 tokens for the untuned model (Table 1), with 64 reserved
+  tokens. That is the baseline a growing vocabulary has to justify itself
+  against.
+- **Span choice decides accuracy.** Selective Latent Thinking and ASTC both
+  protect hard-to-predict content and compress only what the model finds
+  predictable. *Inferred:* the mint decision should be gated the same way,
+  and step 1's per-chunk results should be read by span type.
 
 ## 8. Decisions for Oliver
 
