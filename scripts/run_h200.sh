@@ -49,12 +49,12 @@ python -m kenning probe --model "$MODEL" --out "$RUN" --mode reconstruct \
 echo "== 3. continue: how much of that later text can use (renumbered positions)"
 python -m kenning probe --model "$MODEL" --out "$RUN" --mode continue \
   --source traces --data "$TRACES" --lengths "$CONT_LENGTHS" \
-  --n-samples "$SAMPLES" --batch 8 --steps "$CONT_STEPS" --positions renumber
+  --n-samples "$SAMPLES" --batch 8 --steps "$CONT_STEPS" --positions renumber --save-vectors
 
 echo "== 4. continue again with gap positions, to choose between the two"
 python -m kenning probe --model "$MODEL" --out "$RUN" --mode continue \
   --source traces --data "$TRACES" --lengths "$CONT_LENGTHS" \
-  --n-samples "$SAMPLES" --batch 8 --steps "$CONT_STEPS" --positions gap
+  --n-samples "$SAMPLES" --batch 8 --steps "$CONT_STEPS" --positions gap --save-vectors
 
 echo "== done: $RUN/summary.md and $RUN/capacity.png"
 cat "$RUN/summary.md"

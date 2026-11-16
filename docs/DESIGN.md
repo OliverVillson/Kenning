@@ -182,6 +182,40 @@ pass.
 token embedding, which shows whether good kennings sit far outside the
 ordinary embedding distribution.
 
+### Theory predictions
+
+The theory notes ("Kenning Mathematics", section 7) make predictions about
+the kennings step 1 finds. `kenning predictions` checks each one against the
+continue-mode kennings a run saved with `--save-vectors`
+(`scripts/run_predictions.sh` on the GPU). The confirm and refute rules are
+fixed in `THRESHOLDS` in `kenning/predictions.py`, written before any Granite
+result existed; every report prints their digest so a later change shows.
+
+Every quantity runs on forward passes, Jacobian-vector products (JVPs:
+forward-mode derivatives, how the logits move along one input direction) and
+vector-Jacobian products (VJPs: ordinary backprop). No Jacobian matrix is
+ever formed. The Gauss-Newton matrix G (the Fisher information of the
+continue loss at a kenning) is only used as G times a vector.
+
+| ID | Prediction | Measured as |
+|---|---|---|
+| P1a | At a fixed direction the loss is flat for small and for large norms, changing where the norm crosses the residual-stream updates | Loss along 17 norms; plateau variation as a share of the loss range |
+| P1b | The sign of f'(0), the loss slope in 1/norm at infinite norm, predicts whether the best norm is finite | Direction re-optimised at 4 norms and at infinity; f'(0) exact by scaling sublayer outputs |
+| P2a, P2b | Under plain gradient descent the norm grows like steps^(1/3) when f'(0) > 0 | Norm growth, and the slope of norm cubed against 3 x step size x f'(0) |
+| P3 | Prefix-to-first-token information bounds the loss at large norm | Not testable: step 1 has one fixed prefix |
+| P4a | The spectrum of G decays fast | Largest eigenvalue by Lanczos, trace from sampled score vectors |
+| P4b | The Euclidean nearest token is a much worse substitute than the first token of the G-weighted Lasso readout | Loss increase of each substitute |
+| P4c | Cosine distance tracks behavioural distance better than Euclidean, moderately | Spearman correlations over pairs of kennings |
+| P5a, P5b | The mean of embeddings pays for word order; a centred mean beats the raw mean but loses to deletion | Shuffled copies, Jensen-Shannon divergence, three losses per span |
+| P6a-c | Loss grows sub-linearly with length for text, linearly for random tokens; has a knee in vectors per kenning; gap positions help | From `results.jsonl`, plus a random-token control run |
+| P7 | One Gauss-Newton step from the mean-of-embeddings start recovers most of the optimisation gap | Conjugate-gradient solve with G products |
+| P8a, P8b | The best linear emission logit is near exact for multi-token words, and its error grows at most quadratically with length | Ridge regression of tail log-probability on the final hidden state, held out |
+| P9 | Writer outputs need norms far above token norms (the writer part needs step 2) | Median kenning norm ratio |
+
+Verdicts are CONFIRMED, REFUTED, INCONCLUSIVE (between the thresholds or
+fewer than 6 spans), NOT_TESTABLE and NOT_RUN. The toy model in the dry run
+exercises the code; its verdicts say nothing about Granite.
+
 ## 7. Lessons taken from published work
 
 - **Keep numbers as text.** zip2zip reports GSM8K accuracy for one model

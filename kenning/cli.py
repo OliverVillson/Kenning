@@ -10,7 +10,7 @@ import time
 
 import torch
 
-from . import data, models, probe, report, reuse, toy, traces
+from . import data, models, predictions, probe, report, reuse, toy, traces
 
 
 def _ints(text: str) -> list[int]:
@@ -150,7 +150,11 @@ def cmd_probe(args) -> int:
                         out.flush()
                         if args.save_vectors:
                             name = f"vectors-{mode}-k{k}-n{n}-{positions}-{idx[0]}.pt"
-                            torch.save({"samples": idx, "vectors": vecs, "chunks": ctx[idx]}, os.path.join(args.out, name))
+                            saved = {"samples": idx, "vectors": vecs, "chunks": ctx[idx], "mode": mode, "k": k,
+                                     "n_vectors": n, "positions": positions}
+                            if mode == "continue":
+                                saved["continuations"] = cont[idx]
+                            torch.save(saved, os.path.join(args.out, name))
                         if mode == "reconstruct":
                             note = (f"accuracy {sum(r['accuracy'] for r in rows) / len(rows):.3f}, "
                                     f"lossless {sum(r['lossless'] for r in rows)}/{len(rows)}")
@@ -187,6 +191,30 @@ def cmd_report(args) -> int:
     print(open(os.path.join(args.run, "summary.md")).read())
     if not summary["plot"]:
         print("(install matplotlib to get capacity.png)")
+    return 0
+
+
+def cmd_predictions(args) -> int:
+    dtype = args.dtype if args.dtype != "auto" else "float32"  # JVPs and Lanczos want full precision
+    lm = models.load(args.model, args.device, dtype)
+    st = predictions.Settings(
+        teacher_samples=args.teacher_samples,
+        max_spans=args.max_spans,
+        eval_batch=args.eval_batch,
+        lanczos_steps=args.lanczos_steps,
+        trace_probes=args.trace_probes,
+        cg_steps=args.cg_steps,
+        sphere_steps=args.sphere_steps,
+        gd_steps=args.gd_steps,
+        pair_spans=args.pair_spans,
+        emission_contexts=args.emission_contexts,
+        emission_spans=args.emission_spans,
+        seed=args.seed,
+        skip=tuple(x.strip().upper() for x in args.skip.split(",") if x.strip()),
+    )
+    out = predictions.analyse(lm, args.run, st, control_dir=args.control_run, out_dir=args.out,
+                              log=lambda msg: print(msg, flush=True))
+    print(predictions.to_markdown(out))
     return 0
 
 
@@ -250,6 +278,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lengths", default="4,8,16,32")
     p.add_argument("--out", default=None)
     p.set_defaults(func=cmd_repeats)
+
+    p = sub.add_parser("predictions", help="check the theory's predictions against a run's saved kennings")
+    _add_model_args(p)
+    p.add_argument("--run", required=True, help="probe run directory with --save-vectors continue kennings")
+    p.add_argument("--control-run", default=None, help="a second run on --source random, for P6")
+    p.add_argument("--out", default=None, help="where to write predictions.{json,md} (default: the run)")
+    p.add_argument("--teacher-samples", type=int, default=8, help="continuations sampled from the teacher per span")
+    p.add_argument("--max-spans", type=int, default=8, help="single-vector spans per (length, positions) group")
+    p.add_argument("--eval-batch", type=int, default=4, help="candidate vectors per forward pass")
+    p.add_argument("--lanczos-steps", type=int, default=30)
+    p.add_argument("--trace-probes", type=int, default=8)
+    p.add_argument("--cg-steps", type=int, default=40)
+    p.add_argument("--sphere-steps", type=int, default=100, help="P1b: direction steps at each fixed norm")
+    p.add_argument("--gd-steps", type=int, default=200, help="P2: plain gradient descent steps")
+    p.add_argument("--pair-spans", type=int, default=8, help="P4c: kennings compared pairwise per group")
+    p.add_argument("--emission-contexts", type=int, default=400, help="P8: contexts per span")
+    p.add_argument("--emission-spans", type=int, default=12, help="P8: spans per category and length")
+    p.add_argument("--skip", default="", help="comma-separated tests to skip, e.g. P1,P8")
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(func=cmd_predictions)
 
     p = sub.add_parser("report", help="rebuild summary.md, summary.json and capacity.png for a run")
     p.add_argument("--run", required=True)

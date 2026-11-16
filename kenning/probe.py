@@ -267,20 +267,24 @@ def _position_ids(lm: LM, mode: str, k: int, n: int, m: int, batch: int) -> torc
     return torch.tensor(pos, device=lm.device).unsqueeze(0).expand(batch, -1)
 
 
-def continue_logq(lm: LM, vec: torch.Tensor, conts: torch.Tensor, k: int, positions: str) -> torch.Tensor:
-    """Student log-probabilities over each continuation token given only the kenning.
+def continue_logits(lm: LM, vec: torch.Tensor, conts: torch.Tensor, k: int, positions: str) -> torch.Tensor:
+    """Student logits over each continuation token given only the kenning.
 
     vec [B, n, d]; conts [B, R, m] (R continuations per chunk). The output at
     the last kenning vector predicts x_1, so the m predictions sit at indices
-    n .. n+m-1. Returns [B*R, m, V].
+    n .. n+m-1. Returns [B*R, m, V]. n may be 0: that is the chunk deleted.
     """
     B, R, m = conts.shape
     n = vec.shape[1]
     start = lm.embeddings(_start_ids(lm, B * R))
     cont_emb = lm.embeddings(conts.reshape(B * R, m)[:, :-1])
     x = torch.cat([start, vec.to(lm.dtype).repeat_interleave(R, dim=0), cont_emb], dim=1)
-    logits = _logits(lm, x, _position_ids(lm, positions, k, n, m, B * R))[:, n : n + m].float()
-    return F.log_softmax(logits, dim=-1)
+    return _logits(lm, x, _position_ids(lm, positions, k, n, m, B * R))[:, n : n + m].float()
+
+
+def continue_logq(lm: LM, vec: torch.Tensor, conts: torch.Tensor, k: int, positions: str) -> torch.Tensor:
+    """Log-softmax of :func:`continue_logits`, [B*R, m, V]."""
+    return F.log_softmax(continue_logits(lm, vec, conts, k, positions), dim=-1)
 
 
 def _kl(teacher_logp: torch.Tensor, student_logq: torch.Tensor, B: int) -> torch.Tensor:
